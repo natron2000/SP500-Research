@@ -1,0 +1,95 @@
+import quandl
+import pandas as pd
+import datetime as dt
+import calendar
+import matplotlib.pyplot as plt
+import PEVInflation
+
+
+# Create a function that adds one month from a date object
+def addMonth(dateFun):
+    if dateFun.month < 12:
+        numDay = calendar.monthrange(dateFun.year, dateFun.month + 1)[1]
+    else:
+        numDay = 31
+    dateFun += dt.timedelta(days=numDay)
+    return dateFun
+
+
+beginDate = dt.date(1969, 11, 30)
+date = beginDate
+
+# Test if inflation vs PE is correct or not
+peQ = quandl.get("MULTPL/SP500_PE_RATIO_MONTH", authtoken="e46ejGx3zyniRmpbkzJ6",
+                 start_date="1969-12-01", end_date="2017-12-31", collapse="monthly")
+inflationQ = quandl.get("RATEINF/INFLATION_USA", authtoken="e46ejGx3zyniRmpbkzJ6",
+                        start_date="1969-12-31", end_date="2018-01-01", collapse="monthly")
+
+
+# Create DataFrame to later on plot to see result throughout time
+result = pd.DataFrame(columns=["Date", 'Test result'])
+sp500 = pd.DataFrame(columns=["Date", "SP500 result"])
+date = beginDate
+
+# value for the financial testing model
+money = 1000.00
+share = 0
+lastOwn = False
+
+# Most of this is from the Test Indicator PE part
+for i in range(peQ.shape[0]):
+    if i % 12 == 0:
+        zeroInfHigh, eachInfHigh = PEVInflation.InfVPeReg(addMonth(date) - dt.timedelta(14611))
+        zeroInfHigh *= 1.5
+        eachInfHigh *= 1.5
+
+    # Get PE and Inflation
+    pe = peQ["Value"].iloc[i]
+    inf = inflationQ["Value"].iloc[i]
+
+    # Make the equation
+    highPE = zeroInfHigh + (inf * eachInfHigh)
+
+    # test if I would buy or not and then do so
+    if pe > highPE:
+        if lastOwn:
+            lastOwn = False
+            money = share * SP500["Value"].iloc[i]
+            share = 0
+    else:
+        if not lastOwn:
+            lastOwn = True
+            share = money / SP500["Value"].iloc[i]
+            money = 0
+
+    # Append the result of each month
+    date = addMonth(date)
+    data = {"Date": date,
+            "Test result": money + share * SP500["Value"].iloc[i]}
+    sp = {"Date": date,
+          "SP500 result": 1000.00 * (SP500["Value"].iloc[i] - SP500["Value"].iloc[0]) / SP500["Value"].iloc[0] + 1000}
+
+    result = result.append(data, ignore_index=True)
+    sp500 = sp500.append(sp, ignore_index=True)
+
+# Make sure to sell any remaining share
+money += share * SP500["Value"].iloc[SP500.shape[0] - 12]
+
+# Print friendly version of the information from the test
+print()
+print("Total Revenue: " + str(money))
+print("If not use strategies: " +
+      str(1000.00 * (SP500["Value"].iloc[SP500.shape[0] - 12] - SP500["Value"].iloc[0]) / SP500["Value"].iloc[0]))
+
+# TimeStamp the result
+result = result.set_index('Date')
+sp500 = sp500.set_index('Date')
+# Graph the result
+
+plt.xlabel("Time")
+plt.ylabel("Net Worth (Starting at $1000)")
+plt.title("SP500 vs Test")
+plt.plot(sp500, color="tab:red", label="SP500")
+plt.plot(result, color="tab:blue", label="Test")
+plt.legend()
+plt.show()
