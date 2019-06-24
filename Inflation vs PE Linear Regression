@@ -1,0 +1,37 @@
+import quandl
+import numpy as np
+import datetime as dt
+import calendar
+from sklearn.linear_model import LinearRegression
+
+
+# Create a function that adds one month from a date object
+def addMonth(dateFun):
+    if dateFun.month < 12:
+        numDay = calendar.monthrange(dateFun.year, dateFun.month + 1)[1]
+    else:
+        numDay = 31
+    dateFun += dt.timedelta(days=numDay)
+    return dateFun
+
+# Get the Linear Regerssion of Inflation and PE
+def InfVPeReg(startDate):
+    endDate = startDate
+    for i in range(40 * 12):
+        endDate = addMonth(endDate)
+    # PE Ratio of the SP500
+    pe = quandl.get("MULTPL/SP500_PE_RATIO_MONTH", authtoken="e46ejGx3zyniRmpbkzJ6",
+                    start_date=startDate, end_date=endDate, collapse="monthly")
+    pe.rename(columns={'Value': 'PE'}, inplace=True)
+    # US inflation
+    inflation = quandl.get("RATEINF/INFLATION_USA", authtoken="e46ejGx3zyniRmpbkzJ6",
+                           start_date=startDate, end_date=endDate, collapse="monthly")
+    inflation.rename(columns={'Value': 'Inflation'}, inplace=True)
+
+    y = np.array(pe['PE'])
+    y = y.reshape(-1, 1)
+    x = np.array(inflation['Inflation'])
+    x = x.reshape(-1, 1)
+    regression = LinearRegression()
+    regression.fit(x, y)
+    return regression.intercept_, regression.coef_
